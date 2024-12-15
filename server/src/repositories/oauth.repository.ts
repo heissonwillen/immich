@@ -24,7 +24,16 @@ export class OAuthRepository implements IOAuthRepository {
 
   async getLogoutEndpoint(config: OAuthConfig) {
     const client = await this.getClient(config);
-    return client.issuer.metadata.end_session_endpoint;
+
+    if (client.issuer.metadata.end_session_endpoint) {
+      const url = new URL(client.issuer.metadata.end_session_endpoint);
+      url.searchParams.set('id_token_hint', '');
+      url.searchParams.set('post_logout_redirect_uri', 'http://localhost:3000');
+
+      return url.toString();
+    } else {
+        throw new Error('end_session_endpoint is undefined');
+    }
   }
 
   async getProfile(config: OAuthConfig, url: string, redirectUrl: string): Promise<OAuthProfile> {
@@ -32,6 +41,7 @@ export class OAuthRepository implements IOAuthRepository {
     const params = client.callbackParams(url);
     try {
       const tokens = await client.callback(redirectUrl, params, { state: params.state });
+      this.logger.log(tokens.id_token);
       return await client.userinfo<OAuthProfile>(tokens.access_token || '');
     } catch (error: Error | any) {
       if (error.message.includes('unexpected JWT alg received')) {
